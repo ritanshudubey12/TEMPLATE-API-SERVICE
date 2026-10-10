@@ -1,0 +1,1079 @@
+{
+  "info": {
+    "name": "Template API Microservice",
+    "description": "Run the folders top to bottom (or use the Collection Runner). Folder 00 fetches a local dev token; every other request sends it as Authorization: Bearer {{accessToken}}. All IDs are decimal strings (BIGINT).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4018"
+    },
+    {
+      "key": "websiteId",
+      "value": "67890"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Setup",
+      "item": [
+        {
+          "name": "Get dev access token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Returns a Bearer access token\", function () { pm.expect(body.data.accessToken).to.be.a(\"string\"); pm.expect(body.data.tokenType).to.eql(\"Bearer\"); });",
+                  "pm.collectionVariables.set(\"accessToken\", body.data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dev/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dev",
+                "token"
+              ]
+            },
+            "description": "LOCAL DEV ONLY. Mints an RS256 token that the API verifies against its local JWKS.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"1001\",\n  \"tenantId\": \"2001\",\n  \"organizationId\": \"3001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Health",
+      "item": [
+        {
+          "name": "Liveness - GET /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"status is ok\", function () { pm.expect(pm.response.json().status).to.eql(\"ok\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Readiness - GET /ready",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"status is ready\", function () { pm.expect(pm.response.json().status).to.eql(\"ready\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Templates",
+      "item": [
+        {
+          "name": "Create template (draft)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"slug\", \"adventure-travel-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Envelope has success=true and requestId\", function () { pm.expect(body.success).to.eql(true); pm.expect(body.meta.requestId).to.be.a(\"string\"); });",
+                  "pm.test(\"Template is a DRAFT with string BIGINT id\", function () { pm.expect(body.data.status).to.eql(\"DRAFT\"); pm.expect(body.data.id).to.match(/^[0-9]+$/); pm.expect(body.data.tags).to.have.members([\"adventure\",\"tourism\"]); });",
+                  "pm.collectionVariables.set(\"templateId\", body.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Adventure Travel\",\n  \"slug\": \"{{slug}}\",\n  \"description\": \"Starter website for a travel business\",\n  \"category\": \"travel\",\n  \"tags\": [\n    \"adventure\",\n    \"tourism\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List templates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Envelope has success=true and requestId\", function () { pm.expect(body.success).to.eql(true); pm.expect(body.meta.requestId).to.be.a(\"string\"); });",
+                  "pm.test(\"Contains the new template\", function () { pm.expect(body.data.some(t => t.id === pm.collectionVariables.get(\"templateId\"))).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List templates (search + filters)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Returns an array\", function () { pm.expect(body.data).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates?q=adventure&category=travel&tag=tourism&limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "adventure"
+                },
+                {
+                  "key": "category",
+                  "value": "travel"
+                },
+                {
+                  "key": "tag",
+                  "value": "tourism"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Returns the template\", function () { pm.expect(body.data.id).to.eql(pm.collectionVariables.get(\"templateId\")); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update template metadata",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Name updated\", function () { pm.expect(body.data.name).to.eql(\"Adventure Travel (Updated)\"); pm.expect(body.data.tags).to.include(\"outdoors\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Adventure Travel (Updated)\",\n  \"description\": \"Updated description\",\n  \"tags\": [\n    \"adventure\",\n    \"tourism\",\n    \"outdoors\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Versions & publishing",
+      "item": [
+        {
+          "name": "Create draft version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Version is DRAFT #1 with checksum\", function () { pm.expect(body.data.status).to.eql(\"DRAFT\"); pm.expect(body.data.versionNumber).to.eql(1); pm.expect(body.data.checksum).to.have.length(64); });",
+                  "pm.test(\"BIGINT asset id round-trips exactly\", function () { pm.expect(body.data.document.pages[0].nodes[0].background.assetId).to.eql(\"9007199254741099\"); });",
+                  "pm.collectionVariables.set(\"versionId\", body.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/versions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "versions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": {\n    \"schemaVersion\": 1,\n    \"pages\": [\n      {\n        \"title\": \"Home\",\n        \"slug\": \"home\",\n        \"nodes\": [\n          {\n            \"id\": \"hero\",\n            \"type\": \"section\",\n            \"background\": {\n              \"type\": \"image\",\n              \"assetId\": \"9007199254741099\",\n              \"fit\": \"cover\",\n              \"focalPoint\": {\n                \"x\": 0.5,\n                \"y\": 0.45\n              },\n              \"overlay\": {\n                \"color\": \"#102030\",\n                \"opacity\": 0.2\n              }\n            },\n            \"children\": [\n              {\n                \"id\": \"hero-title\",\n                \"type\": \"heading\",\n                \"props\": {\n                  \"text\": \"Discover the world\",\n                  \"level\": 1\n                }\n              },\n              {\n                \"id\": \"hero-cta\",\n                \"type\": \"button\",\n                \"props\": {\n                  \"label\": \"Book now\",\n                  \"href\": \"/contact\"\n                }\n              }\n            ]\n          }\n        ]\n      },\n      {\n        \"title\": \"About\",\n        \"slug\": \"about\",\n        \"nodes\": [\n          {\n            \"id\": \"about-text\",\n            \"type\": \"text\",\n            \"props\": {\n              \"text\": \"We craft adventures.\"\n            }\n          }\n        ]\n      }\n    ]\n  },\n  \"theme\": {\n    \"colors\": {\n      \"primary\": \"#0b5fff\",\n      \"background\": \"#ffffff\"\n    },\n    \"fonts\": {\n      \"heading\": \"Inter\"\n    }\n  },\n  \"requiredFeatures\": [\n    \"mediaflex\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List versions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Lists the version\", function () { pm.expect(body.data.some(v => v.id === pm.collectionVariables.get(\"versionId\"))).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/versions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "versions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Includes the document\", function () { pm.expect(body.data.document.pages).to.have.length(2); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/versions/{{versionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "versions",
+                "{{versionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Publish version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Template and version are PUBLISHED\", function () { pm.expect(body.data.template.status).to.eql(\"PUBLISHED\"); pm.expect(body.data.version.status).to.eql(\"PUBLISHED\"); pm.expect(body.data.template.currentPublishedVersionId).to.eql(pm.collectionVariables.get(\"versionId\")); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"versionId\": \"{{versionId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create preview token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Short-lived token returned\", function () { pm.expect(body.data.token).to.be.a(\"string\"); pm.expect(body.data.expiresInSeconds).to.eql(300); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/preview-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "preview-token"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Duplicate",
+      "item": [
+        {
+          "name": "Duplicate template",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"dupKey\", \"dup-\" + Date.now());",
+                  "pm.collectionVariables.set(\"dupSlug\", \"adventure-travel-copy-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"New DRAFT template with version 1 copied\", function () { pm.expect(body.data.template.status).to.eql(\"DRAFT\"); pm.expect(body.data.template.id).to.not.eql(pm.collectionVariables.get(\"templateId\")); pm.expect(body.data.version.versionNumber).to.eql(1); });",
+                  "pm.collectionVariables.set(\"duplicateTemplateId\", body.data.template.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{dupKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "duplicate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Adventure Travel Copy\",\n  \"slug\": \"{{dupSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Duplicate template (idempotent replay)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"Same result returned, no second copy\", function () { pm.expect(body.data.template.id).to.eql(pm.collectionVariables.get(\"duplicateTemplateId\")); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{dupKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "duplicate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Adventure Travel Copy\",\n  \"slug\": \"{{dupSlug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Apply to website",
+      "item": [
+        {
+          "name": "Apply template (creates draft pages only)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"applyKey\", \"apply-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 202\", function () { pm.response.to.have.status(202); });",
+                  "pm.test(\"Job accepted\", function () { pm.expect(body.data.jobId).to.match(/^[0-9]+$/); pm.expect([\"QUEUED\",\"RUNNING\",\"SUCCEEDED\"]).to.include(body.data.status); });",
+                  "pm.test(\"Location header points at the job\", function () { pm.expect(pm.response.headers.get(\"Location\")).to.include(\"/api/v1/template-apply-jobs/\"); });",
+                  "pm.collectionVariables.set(\"jobId\", body.data.jobId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{applyKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "apply"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"websiteId\": \"{{websiteId}}\",\n  \"versionId\": \"{{versionId}}\",\n  \"mode\": \"CREATE_PAGES\",\n  \"includeTheme\": true,\n  \"mediaPolicy\": \"REUSE_ACCESSIBLE_ASSETS\",\n  \"expectedWebsiteRevision\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Apply template (idempotent replay)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 202\", function () { pm.response.to.have.status(202); });",
+                  "pm.test(\"Same job returned\", function () { pm.expect(body.data.jobId).to.eql(pm.collectionVariables.get(\"jobId\")); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{applyKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "apply"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"websiteId\": \"{{websiteId}}\",\n  \"versionId\": \"{{versionId}}\",\n  \"mode\": \"CREATE_PAGES\",\n  \"includeTheme\": true,\n  \"mediaPolicy\": \"REUSE_ACCESSIBLE_ASSETS\",\n  \"expectedWebsiteRevision\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get apply job",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(function () {}, 800); // give the background job a moment to finish"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Job SUCCEEDED and nothing was published\", function () { pm.expect(body.data.status).to.eql(\"SUCCEEDED\"); pm.expect(body.data.result.published).to.eql(false); pm.expect(body.data.result.pages).to.have.length(2); pm.expect(body.data.result.themeApplied).to.eql(true); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/template-apply-jobs/{{jobId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "template-apply-jobs",
+                "{{jobId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Archive",
+      "item": [
+        {
+          "name": "Archive the duplicate template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Template is ARCHIVED\", function () { pm.expect(body.data.status).to.eql(\"ARCHIVED\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{duplicateTemplateId}}/archive",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{duplicateTemplateId}}",
+                "archive"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Cleanup after Postman run\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Expected errors (these should fail on purpose)",
+      "item": [
+        {
+          "name": "No token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 401\", function () { pm.response.to.have.status(401); });",
+                  "pm.test(\"UNAUTHENTICATED\", function () { pm.expect(pm.response.json().error.code).to.eql(\"UNAUTHENTICATED\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Malformed id -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"INVALID_ID\", function () { pm.expect(pm.response.json().error.code).to.eql(\"INVALID_ID\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/not-a-number",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "not-a-number"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unknown BIGINT id above 2^53 -> 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"NOT_FOUND\", function () { pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/9007199254740993",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "9007199254740993"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Stale website revision -> 409",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"staleKey\", \"stale-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+                  "pm.test(\"REVISION_CONFLICT\", function () { pm.expect(pm.response.json().error.code).to.eql(\"REVISION_CONFLICT\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{staleKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/templates/{{templateId}}/apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "templates",
+                "{{templateId}}",
+                "apply"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"websiteId\": \"{{websiteId}}\",\n  \"versionId\": \"{{versionId}}\",\n  \"expectedWebsiteRevision\": 6\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

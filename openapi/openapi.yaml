@@ -1,0 +1,409 @@
+openapi: 3.1.0
+info:
+  title: Template API Microservice
+  version: 1.0.0
+  description: |
+    Reusable full-site / page templates for the Website Builder platform.
+    - Every protected route requires `Authorization: Bearer <access_token>` (never body/query/path).
+    - All identifiers are PostgreSQL BIGINT values serialized as **decimal strings**.
+    - Applying a template creates **draft pages only**; it never publishes.
+servers:
+  - url: http://localhost:4018
+security:
+  - BearerAuth: []
+tags:
+  - { name: Templates }
+  - { name: Versions }
+  - { name: Apply }
+  - { name: Ops }
+  - { name: Dev }
+paths:
+  /health:
+    get:
+      tags: [Ops]
+      summary: Liveness
+      security: []
+      responses:
+        "200": { description: Alive, content: { application/json: { schema: { type: object, properties: { status: { type: string, examples: [ok] } } } } } }
+  /ready:
+    get:
+      tags: [Ops]
+      summary: Readiness (database reachable)
+      security: []
+      responses:
+        "200": { description: Ready }
+        "503": { description: Not ready }
+  /dev/token:
+    post:
+      tags: [Dev]
+      summary: LOCAL DEV ONLY - mint a test access token (DEV_AUTH_ENABLED=true, disabled in production)
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                userId: { $ref: "#/components/schemas/BigIntId" }
+                tenantId: { $ref: "#/components/schemas/BigIntId" }
+                organizationId: { $ref: "#/components/schemas/BigIntId" }
+                roles: { type: array, items: { type: string } }
+                permissions: { type: array, items: { $ref: "#/components/schemas/Permission" } }
+                expiresInSeconds: { type: integer, minimum: 60, maximum: 86400 }
+      responses:
+        "200": { description: Token issued }
+  /api/v1/templates:
+    get:
+      tags: [Templates]
+      summary: List / search the catalog visible to the caller (permission template:read)
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/Status" } }
+        - { name: scope, in: query, schema: { $ref: "#/components/schemas/Scope" } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, description: "meta.nextCursor from the previous page", schema: { $ref: "#/components/schemas/BigIntId" } }
+      responses:
+        "200":
+          description: Page of templates
+          content: { application/json: { schema: { $ref: "#/components/schemas/TemplateList" } } }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Templates]
+      summary: Create a template draft (permission template:create)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTemplate" }
+            example: { name: Adventure Travel, slug: adventure-travel, description: Starter website for a travel business, category: travel, tags: [adventure, tourism] }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateResponse" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/templates/{templateId}:
+    parameters: [{ $ref: "#/components/parameters/TemplateId" }]
+    get:
+      tags: [Templates]
+      summary: Read a template (template:read)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateResponse" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [Templates]
+      summary: Update metadata (template:update)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateTemplate" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateResponse" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/templates/{templateId}/versions:
+    parameters: [{ $ref: "#/components/parameters/TemplateId" }]
+    get:
+      tags: [Versions]
+      summary: List versions (template:read; callers who cannot edit see only published versions)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: array, items: { $ref: "#/components/schemas/Version" } }, meta: { $ref: "#/components/schemas/Meta" } } } } } }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Versions]
+      summary: Create a draft version (template:update)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateVersion" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/VersionResponse" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+  /api/v1/templates/{templateId}/versions/{versionId}:
+    parameters:
+      - { $ref: "#/components/parameters/TemplateId" }
+      - { $ref: "#/components/parameters/VersionId" }
+    get:
+      tags: [Versions]
+      summary: Read a version including its document (template:read)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/VersionResponse" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/templates/{templateId}/publish:
+    parameters: [{ $ref: "#/components/parameters/TemplateId" }]
+    post:
+      tags: [Versions]
+      summary: Publish a draft version (template:publish). Published versions are immutable.
+      requestBody:
+        content: { application/json: { schema: { type: object, additionalProperties: false, properties: { versionId: { $ref: "#/components/schemas/BigIntId" } }, description: "Defaults to the latest draft" } } }
+      responses:
+        "200": { description: Published }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/templates/{templateId}/archive:
+    parameters: [{ $ref: "#/components/parameters/TemplateId" }]
+    post:
+      tags: [Templates]
+      summary: Archive a template (template:archive)
+      requestBody:
+        content: { application/json: { schema: { type: object, additionalProperties: false, properties: { reason: { type: string, maxLength: 500 } } } } }
+      responses:
+        "200": { description: Archived, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateResponse" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/templates/{templateId}/duplicate:
+    parameters:
+      - { $ref: "#/components/parameters/TemplateId" }
+      - { $ref: "#/components/parameters/IdempotencyKey" }
+    post:
+      tags: [Templates]
+      summary: Duplicate into a new draft template (template:create)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                scope: { $ref: "#/components/schemas/Scope" }
+                visibility: { $ref: "#/components/schemas/Visibility" }
+                versionId: { $ref: "#/components/schemas/BigIntId" }
+      responses:
+        "201": { description: Created (or the original result on an idempotent replay) }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/templates/{templateId}/preview-token:
+    parameters: [{ $ref: "#/components/parameters/TemplateId" }]
+    post:
+      tags: [Templates]
+      summary: Create a scoped, short-lived (300 s) preview token (template:read)
+      requestBody:
+        content: { application/json: { schema: { type: object, additionalProperties: false, properties: { versionId: { $ref: "#/components/schemas/BigIntId" } } } } }
+      responses:
+        "201": { description: Token created }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/templates/{templateId}/apply:
+    parameters:
+      - { $ref: "#/components/parameters/TemplateId" }
+      - { $ref: "#/components/parameters/IdempotencyKey" }
+    post:
+      tags: [Apply]
+      summary: Apply a published version to a website as DRAFT pages (template:apply). Never publishes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApplyRequest" }
+            example: { websiteId: "67890", versionId: "9007199254741010", mode: CREATE_PAGES, includeTheme: true, mediaPolicy: REUSE_ACCESSIBLE_ASSETS, expectedWebsiteRevision: 7 }
+      responses:
+        "202":
+          description: Accepted; poll the job (also returned in the Location header)
+          headers: { Location: { schema: { type: string } } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: object, properties: { jobId: { $ref: "#/components/schemas/BigIntId" }, status: { $ref: "#/components/schemas/JobStatus" } } }
+                  meta: { $ref: "#/components/schemas/Meta" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "CONFLICT | REVISION_CONFLICT | IDEMPOTENCY_CONFLICT", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+  /api/v1/template-apply-jobs/{jobId}:
+    parameters: [{ name: jobId, in: path, required: true, schema: { $ref: "#/components/schemas/BigIntId" } }]
+    get:
+      tags: [Apply]
+      summary: Read an apply job (same tenant/organization only)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/JobResponse" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    TemplateId: { name: templateId, in: path, required: true, schema: { $ref: "#/components/schemas/BigIntId" } }
+    VersionId: { name: versionId, in: path, required: true, schema: { $ref: "#/components/schemas/BigIntId" } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, pattern: "^[A-Za-z0-9._:-]{1,255}$" } }
+  responses:
+    Error:
+      description: Error envelope (400 VALIDATION_ERROR/INVALID_ID, 401 UNAUTHENTICATED, 403 FORBIDDEN, 404 NOT_FOUND, 409 CONFLICT, 413 PAYLOAD_TOO_LARGE, 429 RATE_LIMITED, 500 INTERNAL_ERROR)
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+  schemas:
+    BigIntId:
+      type: string
+      pattern: "^[0-9]+$"
+      description: PostgreSQL BIGINT as a decimal string (never a JSON number).
+      examples: ["9007199254740993"]
+    Permission: { type: string, enum: [template:read, template:create, template:update, template:publish, template:archive, template:apply, template:admin] }
+    Scope: { type: string, enum: [PLATFORM, TENANT, ORGANIZATION] }
+    Visibility: { type: string, enum: [PRIVATE, TENANT, ORGANIZATION, PUBLIC] }
+    Status: { type: string, enum: [DRAFT, PUBLISHED, ARCHIVED] }
+    JobStatus: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED] }
+    Meta:
+      type: object
+      properties: { requestId: { type: string } }
+      additionalProperties: true
+    ErrorResponse:
+      type: object
+      required: [success, error, meta]
+      properties:
+        success: { const: false }
+        error: { type: object, required: [code, message], properties: { code: { type: string }, message: { type: string }, details: { type: object } } }
+        meta: { $ref: "#/components/schemas/Meta" }
+    Template:
+      type: object
+      properties:
+        id: { $ref: "#/components/schemas/BigIntId" }
+        scope: { $ref: "#/components/schemas/Scope" }
+        tenantId: { oneOf: [{ $ref: "#/components/schemas/BigIntId" }, { type: "null" }] }
+        organizationId: { oneOf: [{ $ref: "#/components/schemas/BigIntId" }, { type: "null" }] }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        category: { type: [string, "null"] }
+        tags: { type: array, items: { type: string } }
+        visibility: { $ref: "#/components/schemas/Visibility" }
+        status: { $ref: "#/components/schemas/Status" }
+        currentPublishedVersionId: { oneOf: [{ $ref: "#/components/schemas/BigIntId" }, { type: "null" }] }
+        createdBy: { $ref: "#/components/schemas/BigIntId" }
+        updatedBy: { $ref: "#/components/schemas/BigIntId" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TemplateResponse:
+      type: object
+      properties: { success: { type: boolean }, data: { $ref: "#/components/schemas/Template" }, meta: { $ref: "#/components/schemas/Meta" } }
+    TemplateList:
+      type: object
+      properties:
+        success: { type: boolean }
+        data: { type: array, items: { $ref: "#/components/schemas/Template" } }
+        meta: { type: object, properties: { requestId: { type: string }, limit: { type: integer }, nextCursor: { oneOf: [{ $ref: "#/components/schemas/BigIntId" }, { type: "null" }] } } }
+    CreateTemplate:
+      type: object
+      additionalProperties: false
+      required: [name, slug]
+      description: Ownership (tenant/organization/createdBy) is derived from the verified token; sending it is a validation error.
+      properties:
+        name: { type: string, maxLength: 200 }
+        slug: { type: string, pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$", minLength: 2, maxLength: 80 }
+        description: { type: string, maxLength: 2000 }
+        category: { type: string, default: general, examples: [travel] }
+        tags: { type: array, maxItems: 20, items: { type: string } }
+        scope: { $ref: "#/components/schemas/Scope" }
+        visibility: { $ref: "#/components/schemas/Visibility" }
+    UpdateTemplate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string }
+        description: { type: [string, "null"] }
+        category: { type: string }
+        tags: { type: array, items: { type: string } }
+        visibility: { $ref: "#/components/schemas/Visibility" }
+    Version:
+      type: object
+      properties:
+        id: { $ref: "#/components/schemas/BigIntId" }
+        templateId: { $ref: "#/components/schemas/BigIntId" }
+        versionNumber: { type: integer }
+        schemaVersion: { type: integer }
+        requiredFeatures: { type: array, items: { type: string } }
+        previewAssetId: { oneOf: [{ $ref: "#/components/schemas/BigIntId" }, { type: "null" }] }
+        checksum: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
+        createdBy: { $ref: "#/components/schemas/BigIntId" }
+        createdAt: { type: string, format: date-time }
+        publishedAt: { type: [string, "null"], format: date-time }
+        document: { $ref: "#/components/schemas/TemplateDocument" }
+        theme: { type: object }
+    VersionResponse:
+      type: object
+      properties: { success: { type: boolean }, data: { $ref: "#/components/schemas/Version" }, meta: { $ref: "#/components/schemas/Meta" } }
+    CreateVersion:
+      type: object
+      additionalProperties: false
+      required: [document]
+      properties:
+        document: { $ref: "#/components/schemas/TemplateDocument" }
+        theme: { type: object }
+        requiredFeatures: { type: array, items: { type: string } }
+        previewAssetId: { $ref: "#/components/schemas/BigIntId" }
+    TemplateDocument:
+      type: object
+      required: [schemaVersion, pages]
+      properties:
+        schemaVersion: { const: 1 }
+        pages:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [title, slug, nodes]
+            properties:
+              title: { type: string }
+              slug: { type: string }
+              nodes: { type: array, items: { $ref: "#/components/schemas/Node" } }
+    Node:
+      type: object
+      required: [id, type]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [section, container, columns, heading, text, image, video, button, link, list, gallery, form, divider, spacer] }
+        props: { type: object, description: "assetId, when present, is a BIGINT string. No inline handlers; only http/https/mailto/tel URLs." }
+        background:
+          type: object
+          description: MediaFlex placement. Stores asset IDs, never URLs. A video background requires fallbackAssetId.
+          properties:
+            type: { type: string, enum: [image, video, color, gradient] }
+            assetId: { $ref: "#/components/schemas/BigIntId" }
+            fallbackAssetId: { $ref: "#/components/schemas/BigIntId" }
+            fit: { type: string, enum: [cover, contain, fill, none] }
+            focalPoint: { type: object, properties: { x: { type: number }, y: { type: number } } }
+            overlay: { type: object, properties: { color: { type: string }, opacity: { type: number } } }
+        children: { type: array, items: { $ref: "#/components/schemas/Node" } }
+    ApplyRequest:
+      type: object
+      additionalProperties: false
+      required: [websiteId]
+      properties:
+        websiteId: { $ref: "#/components/schemas/BigIntId" }
+        versionId: { $ref: "#/components/schemas/BigIntId" }
+        mode: { const: CREATE_PAGES }
+        includeTheme: { type: boolean, default: false }
+        mediaPolicy: { const: REUSE_ACCESSIBLE_ASSETS }
+        expectedWebsiteRevision: { type: integer, minimum: 0 }
+    JobResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            id: { $ref: "#/components/schemas/BigIntId" }
+            templateId: { $ref: "#/components/schemas/BigIntId" }
+            versionId: { $ref: "#/components/schemas/BigIntId" }
+            websiteId: { $ref: "#/components/schemas/BigIntId" }
+            status: { $ref: "#/components/schemas/JobStatus" }
+            result:
+              type: [object, "null"]
+              properties:
+                published: { const: false }
+                themeApplied: { type: boolean }
+                pages: { type: array, items: { type: object, properties: { pageId: { $ref: "#/components/schemas/BigIntId" }, slug: { type: string }, title: { type: string }, draftRevisionId: { $ref: "#/components/schemas/BigIntId" } } } }
+            errorCode: { type: [string, "null"] }
+        meta: { $ref: "#/components/schemas/Meta" }

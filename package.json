@@ -1,0 +1,43 @@
+{
+  "name": "template-api",
+  "version": "1.0.0",
+  "description": "Template API microservice for the Website Builder platform (Node.js, TypeScript, PostgreSQL via pg, no ORM)",
+  "private": true,
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "migrate": "tsx src/db/migrate.ts",
+    "migrate:prod": "node dist/db/migrate.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "postman": "npx -y newman run postman/Template-API.postman_collection.json -e postman/Template-API.local.postman_environment.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^5.3.0",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.3.0",
+    "jose": "^5.10.0",
+    "pg": "^8.23.1",
+    "pino": "^9.14.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9",
+    "yaml": "^2.9.1"
+  }
+}
